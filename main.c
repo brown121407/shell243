@@ -19,8 +19,22 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 int main() {
-    printf("Hello, World!\n");
+    while (1) {
+        char *line = readline("$ ");
+        if (!line) {
+            break;
+        }
+        puts(line);
+        if (*line) {
+            add_history(line);
+        }
+        free(line);
+    }
+
     return 0;
 }
