@@ -29,10 +29,15 @@ int main() {
         if (!line) {
             break;
         }
-        puts(line);
         if (*line) {
             add_history(line);
+            split_arguments_by_space(line);
+            if (pipes_cnt == 1)
+                shell_run();
+            else
+                shell_run_pipes();
         }
+
         free(line);
     }
 
