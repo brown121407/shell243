@@ -1,0 +1,47 @@
+GRAMMAR
+-------
+
+Inspired by the POSIX standard for the "Shell Command Language"
+[1]. Specified in a kind of EBNF [2][3]. Tokens are written in
+uppercase and parser rules in lowercase.
+
+Described for humans - the lexer and parser are written by hand. The
+"program" rule is the root of the parser.
+
+======= grammar below ================================================
+
+WORD = ? like the WORD in the POSIX shell standard, but dumber ? ;
+GT   = ">" ;
+DGT  = ">>" ;
+LT   = "<" ;
+DLT  = "<<" ;
+AMP  = "&" ;
+AND  = "&&" ;
+PIPE = "|" ;
+OR   = "||" ;
+SEMI = ";" ;
+IONUM = ? digit ?, { ? digit ? }
+
+program = and or, { separator, and or } ;
+
+and or = pipe sequence
+       | and or, AND, pipe sequence
+       | and or, OR, pipe sequence
+       ;
+
+pipe sequence = command, { PIPE, command } ;
+
+command = WORD, { WORD }, { redirect } ;
+
+redirect = [ IONUM ], ( LT | GT | DGT ), WORD ;
+
+separator = ( AMP | SEMI ) ;
+
+======= grammar above ================================================
+
+References:
+-----------
+
+[1]: https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
+[2]: https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form
+[3]: https://www.ics.uci.edu/~pattis/misc/ebnf2.pdf
