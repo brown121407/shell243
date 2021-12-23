@@ -23,47 +23,108 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdbool.h>
+#include <sys/stat.h>
 
 #include "eval.h"
 #include "debug.h"
 
-static int
-eval_command (ast_node *ast)
+pid_t *bg_pids;
+int bg_pids_len;
+
+void
+eval_init ()
 {
-  char **argv = (char **) malloc (sizeof (char *) * ast->len);
-  int i;
-  for (i = 0; i < ast->len && ast->children[i]->type == AST_WORD; i++)
-    argv[i] = ast->children[i]->string;
+    bg_pids_len = 2;
+    bg_pids = malloc(bg_pids_len * sizeof(pid_t));
+}
 
-  // TODO use redirects (next nodes starting with i) 
+static int
+eval_command (int in_fd, int out_fd, ast_node *cmd)
+{
+    pid_t pid = fork();
 
-  pid_t pid = fork();
-  if (pid == -1)
-    perror("shell");
-  else if (pid == 0)
-    {
-      if (execvp(argv[0], argv) == -1)
-	perror ("shell");
+    if (pid == -1) {
+        perror("shell");
+        return errno;
+    } else if (pid == 0) {
+        if (in_fd != STDIN_FILENO) {
+            dup2(in_fd, STDIN_FILENO);
+            close(in_fd);
+        }
+
+        if (out_fd != STDOUT_FILENO) {
+            dup2(out_fd, STDOUT_FILENO);
+            close(out_fd);
+        }
+
+        char **argv = (char **) malloc (sizeof (char *) * cmd->len);
+        int i;
+        for (i = 0; i < cmd->len && cmd->children[i]->type == AST_WORD; i++)
+            argv[i] = cmd->children[i]->string;
+
+        for (; i < cmd->len; i++) {
+            ast_node *node = cmd->children[i];
+            // TODO 0 1 2 inainte
+            ast_node *operator = node->children[0];
+            ast_node *file = node->children[1];
+            if (operator->type == AST_REDIR_OP) {
+                if (strcmp(operator->string, ">") == 0) {
+                    char* output = file->string;
+                    int fd = open(output, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+                    dup2 (fd, STDOUT_FILENO);
+                    close(fd);
+                } else if (strcmp(operator->string, ">>") == 0) {
+                    char* output = file->string;
+                    int fd = open(output, O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+                    dup2 (fd, STDOUT_FILENO);
+                    close(fd);
+                } else if (strcmp(operator->string, "<") == 0) {
+                    char* input = file->string;
+                    int fd = open(input, O_CREAT | O_RDONLY);
+                    dup2 (fd, STDIN_FILENO);
+                    close(fd);
+                }
+            }
+        }
+
+        if (execvp(argv[0], argv)) {
+            perror("shell");
+            return errno;
+        }
     }
-  else
-    {
-      int wstatus;
-      waitpid(pid, &wstatus, 0);
-      free(argv);
 
-      return wstatus;
-    }
-
-  return -1;
+    return pid;
 }
 
 static int
 eval_pipe_seq (ast_node *ast)
 {
-  // TODO
-  // needs custom AST_COMMAND evaluation here, to be able to pipe.
-  // go through children in order and pipe n into n + 1
-  return 0;
+    pid_t *pids = (pid_t *) malloc((ast->len - 1) * sizeof(pid_t));
+    int in = STDIN_FILENO, fildes[2];
+    int stdin_copy = dup(STDIN_FILENO);
+    for (int i = 0; i < ast->len - 1; i++) {
+        pipe(fildes);
+        pids[i] = eval_command(in, fildes[1], ast->children[i]);
+        close(fildes[1]);
+        in = fildes[0];
+    }
+
+    if (in != 0)
+        dup2(in, 0);
+
+    pids[ast->len - 1] = eval_command(STDIN_FILENO, STDOUT_FILENO, ast->children[ast->len - 1]);
+    dup2(stdin_copy, STDIN_FILENO);
+    close(stdin_copy);
+
+    int wstatus;
+    for (int i = 0; i < ast->len; i++) {
+        wstatus = 0;
+        waitpid(pids[i], &wstatus, 0);
+    }
+    return wstatus;
 }
 
 static int
