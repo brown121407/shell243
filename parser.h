@@ -19,6 +19,8 @@
 #ifndef SH243_PARSER_H
 #define SH243_PARSER_H
 
+#include <stdbool.h>
+
 typedef enum ast_node_type
   {
     AST_PROGRAM,
@@ -48,5 +50,8 @@ parse ();
 
 void
 ast_free (ast_node *node);
+
+bool
+check_ast_error (ast_node *node);
 
 #endif

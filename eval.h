@@ -27,4 +27,7 @@
 int
 eval (ast_node *ast);
 
+void
+eval_init ();
+
 #endif

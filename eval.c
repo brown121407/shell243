@@ -160,8 +160,6 @@ eval (ast_node *ast)
     {
     case AST_PROGRAM:
       return eval_program (ast);
-    case AST_COMMAND:
-      return eval_command (ast);
     case AST_AND:
     case AST_OR:
       return eval_and_or (ast);
@@ -172,6 +170,4 @@ eval (ast_node *ast)
 	       ast_type_to_string (ast->type));
       return -1;
     }
-
-  return 0;
 }

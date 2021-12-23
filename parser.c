@@ -190,19 +190,13 @@ static ast_node *
 parse_pipe_seq ()
 {
   ast_node *command_node = parse_command ();
-
-  if (!MATCH (TOK_PIPE))
-    return command_node;
-
   ast_node *pipe_seq_node = empty_node (AST_PIPE_SEQ);
   add_child (pipe_seq_node, command_node);
-  do
-    {
-      current_token = next_token ();
-      command_node = parse_command ();
-      add_child (pipe_seq_node, command_node);
-    }
-  while (MATCH (TOK_PIPE));
+  while (MATCH (TOK_PIPE)) {
+      current_token = next_token();
+      command_node = parse_command();
+      add_child(pipe_seq_node, command_node);
+  }
 
   return pipe_seq_node;
 }

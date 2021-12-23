@@ -29,6 +29,7 @@
 int
 main (int argc, char *argv[])
 {
+    eval_init ();
   while (true)
     {
       char *line = readline ("$ ");
