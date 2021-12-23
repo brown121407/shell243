@@ -276,5 +276,17 @@ parse ()
   return program_node;
 }
 
+bool
+check_ast_error(ast_node *ast) {
+    if (ast->type == AST_ERROR) {
+        fprintf(stdout, "%s\n", ast->string);
+        return true;
+    } else {
+        bool found = false;
+        for (int i = 0; i < ast->len; ++i)
+            found = found || check_ast_error(ast->children[i]);
+        return found;
+    }
+}
 
 #undef MATCH

@@ -143,13 +143,15 @@ eval_and_or (ast_node *ast)
 int
 eval_program (ast_node *ast)
 {
-  // TODO
-  // for each child in ast->children
-  //   if child is not separator
-  //     if next child is AST_AMP
-  //       eval child, but run in background
-  //     else eval child
-  //   else skip child
+    for (int i = 0; i < ast->len; i++)
+        if (ast->children[i]->type != AST_SEMI && ast->children[i]->type != AST_AMP)
+        {
+            if (ast->len > i + 1 && ast->children[i + 1]->type == AST_AMP) {
+
+            } else {
+                eval(ast->children[i]);
+            }
+        }
   return 0;
 }
 
@@ -171,3 +173,4 @@ eval (ast_node *ast)
       return -1;
     }
 }
+
