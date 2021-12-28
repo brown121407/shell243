@@ -30,4 +30,7 @@ eval (ast_node *ast);
 void
 eval_init ();
 
+void
+check_bg_processes ();
+
 #endif

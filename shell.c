@@ -39,11 +39,13 @@ main (int argc, char *argv[])
 	  add_history (line);
 	  init_lexer (line);
 	  ast_node *ast = parse ();
-      print_ast (ast, 0);
+      // print_ast (ast, 0);
       if (!check_ast_error(ast))
         eval (ast);
 	  ast_free (ast);
-	}
+  }
+  else
+    check_bg_processes ();
 
       free (line);
     }

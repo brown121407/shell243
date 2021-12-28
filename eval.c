@@ -27,12 +27,13 @@
 #include <string.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <pwd.h>
 
 #include "eval.h"
 #include "debug.h"
 
 pid_t *bg_pids;
-int bg_pids_len;
+int bg_pids_len, bg_pids_crnt;
 
 void
 eval_init ()
@@ -44,6 +45,26 @@ eval_init ()
 static int
 eval_command (int in_fd, int out_fd, ast_node *cmd)
 {
+    if (strcmp(cmd->children[0]->string, "cd") == 0){
+        if(cmd->len > 2)
+            printf( "cd: Too many arguments\n");
+        else if (cmd->len == 1){
+            struct passwd *pw = getpwuid(getuid());
+            const char *homedir = pw->pw_dir;
+            chdir(homedir);
+        } else {
+            if (chdir(cmd->children[1]->string) != 0)
+                perror(cmd->children[1]->string);
+        }
+    } else if (strcmp(cmd->children[0]->string, "exit") == 0){
+        if (cmd->len == 1)
+            exit(0);
+        else if(cmd->len > 1)
+            printf( "cd: Too many arguments\n");
+    }
+
+
+
     pid_t pid = fork();
 
     if (pid == -1) {
@@ -94,6 +115,7 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
             perror("shell");
             return errno;
         }
+
     }
 
     return pid;
@@ -112,8 +134,8 @@ eval_pipe_seq (ast_node *ast)
         in = fildes[0];
     }
 
-    if (in != 0)
-        dup2(in, 0);
+    if (in != STDIN_FILENO)
+        dup2(in, STDIN_FILENO);
 
     pids[ast->len - 1] = eval_command(STDIN_FILENO, STDOUT_FILENO, ast->children[ast->len - 1]);
     dup2(stdin_copy, STDIN_FILENO);
@@ -124,19 +146,23 @@ eval_pipe_seq (ast_node *ast)
         wstatus = 0;
         waitpid(pids[i], &wstatus, 0);
     }
+
     return wstatus;
 }
 
 static int
 eval_and_or (ast_node *ast)
 {
-  // TODO
-  // if ast->type is AST_AND:
-  //   eval first node
-  //   if returns 0 eval second node
-  // else is AST_OR:
-  //   eval first node
-  //   if returns != 0 eval second node
+    int result;
+    if (ast->type == AST_AND) {
+        result = eval(ast->children[0]);
+        if (result == 0)
+            return eval(ast->children[1]);
+    } else {
+        result = eval(ast->children[0]);
+        if (result != 0)
+            return eval(ast->children[1]);
+    }
   return 0;
 }
 
@@ -147,12 +173,36 @@ eval_program (ast_node *ast)
         if (ast->children[i]->type != AST_SEMI && ast->children[i]->type != AST_AMP)
         {
             if (ast->len > i + 1 && ast->children[i + 1]->type == AST_AMP) {
+                pid_t pid;
+                bg_pids_crnt++;
+                if (bg_pids_crnt >= bg_pids_len) {
+                    bg_pids_len *= 2;
+                    pid_t *new_pids = malloc (bg_pids_len * sizeof (pid_t));
+                    for (int j = 0; j < bg_pids_crnt; j++) {
+                        new_pids[j] = bg_pids[j];
+                    }
+                    free(bg_pids);
+                    bg_pids = new_pids;
+                }
 
-            } else {
+                pid = fork();
+                if (pid == -1) {
+                    bg_pids_crnt--;
+                    perror("shell");
+                    return errno;
+                } else if (pid == 0) {
+                    exit(eval(ast->children[i]));
+                } else {
+                    printf("[%d] %d\n", bg_pids_crnt, pid);
+                    bg_pids[bg_pids_crnt] = pid;
+                }
+            } else { // foreground process
                 eval(ast->children[i]);
             }
+
+            check_bg_processes();
         }
-  return 0;
+    return 0;
 }
 
 int
@@ -172,5 +222,21 @@ eval (ast_node *ast)
 	       ast_type_to_string (ast->type));
       return -1;
     }
+}
+
+void
+check_bg_processes ()
+{
+    for (int j = 1; j <= bg_pids_crnt; j++) {
+        int status;
+        if (bg_pids[j] != -1) {
+            waitpid(bg_pids[j], &status, WNOHANG);
+            if (WIFEXITED(status)) {
+                printf("[%d]+ Done\n", j);
+                bg_pids[j] = -1;
+            }
+        }
+    }
+    for (; bg_pids_crnt >= 1 && bg_pids[bg_pids_crnt] == -1; bg_pids_crnt--) {}
 }
 
