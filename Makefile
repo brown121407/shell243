@@ -1,8 +1,10 @@
 .PHONY: clean
 
-CFLAGS = -std=c11 -I. -Wall -g
+DEFS   = -DDEBUG
+CDEBUG = -g
+CFLAGS = -std=c11 -I. -Wall $(CDEBUG) $(DEFS)
 LDLIBS = -lreadline
-OBJS = shell.o lexer.o debug.o parser.o eval.o
+OBJS   = shell.o lexer.o debug.o parser.o eval.o
 
 all: $(OBJS)
 	$(CC) -o shell243 $(OBJS) $(LDLIBS) $(CFLAGS)
