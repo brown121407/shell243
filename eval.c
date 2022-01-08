@@ -48,25 +48,42 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
   if (strcmp (cmd->children[0]->string, "cd") == 0)
     {
       if (cmd->len > 2)
-	printf ("cd: Too many arguments\n");
+	{
+	  errno = EINVAL;
+	  perror ("cd");
+	  return -1;
+	}
       else if (cmd->len == 1)
 	{
 	  struct passwd *pw = getpwuid (getuid ());
 	  const char *homedir = pw->pw_dir;
-	  chdir (homedir);
+	  if (chdir (homedir) != 0)
+	    {
+	      perror ("cd");
+	      return -1;
+	    }
 	}
       else
 	{
 	  if (chdir (cmd->children[1]->string) != 0)
-	    perror (cmd->children[1]->string);
+	    {
+	      perror ("cd");
+	      return -1;
+	    }
 	}
+
+      return 0;
     }
   else if (strcmp (cmd->children[0]->string, "exit") == 0)
     {
       if (cmd->len == 1)
-	exit (0);
-      else if (cmd->len > 1)
-	printf ("cd: Too many arguments\n");
+	exit (EXIT_SUCCESS);
+
+      // TODO if 1 argument, turn into int and pass to exit
+
+      errno = EINVAL;
+      perror ("exit");
+      return -1;
     }
 
   pid_t pid = fork ();
@@ -74,7 +91,7 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
   if (pid == -1)
     {
       perror ("shell");
-      return errno;
+      return -1;
     }
   else if (pid == 0)
     {
@@ -90,10 +107,12 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
 	  close (out_fd);
 	}
 
-      char **argv = (char **) malloc (sizeof (char *) * cmd->len);
+      char **argv = (char **) malloc (sizeof (char *) * (cmd->len + 1));
       int i;
       for (i = 0; i < cmd->len && cmd->children[i]->type == AST_WORD; i++)
 	argv[i] = cmd->children[i]->string;
+
+      argv[i] = NULL;
 
       for (; i < cmd->len; i++)
 	{
@@ -133,7 +152,7 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
       if (execvp (argv[0], argv))
 	{
 	  perror ("shell");
-	  return errno;
+	  exit(errno);
 	}
     }
 
@@ -143,7 +162,7 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
 static int
 eval_pipe_seq (ast_node *ast)
 {
-  pid_t *pids = (pid_t *) malloc ((ast->len - 1) * sizeof (pid_t));
+  pid_t *pids = (pid_t *) malloc (ast->len * sizeof (pid_t));
   int in = STDIN_FILENO, fildes[2];
   int stdin_copy = dup (STDIN_FILENO);
   for (int i = 0; i < ast->len - 1; i++)
@@ -166,8 +185,11 @@ eval_pipe_seq (ast_node *ast)
   for (int i = 0; i < ast->len; i++)
     {
       wstatus = 0;
-      waitpid (pids[i], &wstatus, 0);
+      if (pids[i] > 0) // Negative PIDs mean something went wrong, so don't wait.
+	waitpid (pids[i], &wstatus, 0);
     }
+
+  free (pids);
 
   return wstatus;
 }
