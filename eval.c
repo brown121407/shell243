@@ -79,7 +79,24 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
       if (cmd->len == 1)
 	exit (EXIT_SUCCESS);
 
-      // TODO if 1 argument, turn into int and pass to exit
+      if (cmd->len == 2)
+	{
+	  errno = 0;
+
+	  char *endptr;
+	  long exit_code = strtol (cmd->children[1]->string, &endptr, 10);
+
+	  if (errno)
+	    {
+	      perror ("exit");
+	      return -1;
+	    }
+
+	  if (endptr != cmd->children[1]->string)
+	    {
+	      exit (exit_code);
+	    }
+	}
 
       errno = EINVAL;
       perror ("exit");

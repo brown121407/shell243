@@ -2,7 +2,7 @@
 
 DEFS   = -DDEBUG
 CDEBUG = -g
-CFLAGS = -std=c11 -I. -Wall $(CDEBUG) $(DEFS)
+CFLAGS = -std=c11 -I. -Wall -Wextra -Wpedantic $(CDEBUG) $(DEFS)
 LDLIBS = -lreadline
 OBJS   = shell.o lexer.o debug.o parser.o eval.o
 
