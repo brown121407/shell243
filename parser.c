@@ -116,13 +116,13 @@ static ast_node *
 parse_redirect ()
 {
   ast_node *fd_node = NULL, *redir_op_node = NULL, *file_node = NULL;
-  
+
   if (MATCH (TOK_IONUM))
     {
       fd_node = from_token (current_token, AST_NUMBER);
       current_token = next_token ();
     }
-  
+
   if (!(MATCH (TOK_LT) || MATCH (TOK_GT) || MATCH (TOK_DGT)))
     {
       char err[64];
@@ -132,7 +132,7 @@ parse_redirect ()
     }
 
   redir_op_node = from_token (current_token, AST_REDIR_OP);
-  
+
   current_token = next_token ();
   if (!MATCH (TOK_WORD))
     {
@@ -192,11 +192,12 @@ parse_pipe_seq ()
   ast_node *command_node = parse_command ();
   ast_node *pipe_seq_node = empty_node (AST_PIPE_SEQ);
   add_child (pipe_seq_node, command_node);
-  while (MATCH (TOK_PIPE)) {
-      current_token = next_token();
-      command_node = parse_command();
-      add_child(pipe_seq_node, command_node);
-  }
+  while (MATCH (TOK_PIPE))
+    {
+      current_token = next_token ();
+      command_node = parse_command ();
+      add_child (pipe_seq_node, command_node);
+    }
 
   return pipe_seq_node;
 }
@@ -204,8 +205,7 @@ parse_pipe_seq ()
 static ast_node *
 parse_and_or_nested (ast_node *left)
 {
-  ast_node *and_or_node =
-    empty_node (MATCH (TOK_AND) ? AST_AND : AST_OR);
+  ast_node *and_or_node = empty_node (MATCH (TOK_AND) ? AST_AND : AST_OR);
   current_token = next_token ();
   ast_node *pipe_seq_node = parse_pipe_seq ();
 
@@ -226,11 +226,10 @@ parse_and_or ()
   if (!MATCH (TOK_AND) && !MATCH (TOK_OR))
     return pipe_seq_node;
 
-  ast_node *and_or_node =
-    empty_node (MATCH (TOK_AND) ? AST_AND : AST_OR);
+  ast_node *and_or_node = empty_node (MATCH (TOK_AND) ? AST_AND : AST_OR);
   add_child (and_or_node, pipe_seq_node);
   current_token = next_token ();
-  
+
   pipe_seq_node = parse_pipe_seq ();
   add_child (and_or_node, pipe_seq_node);
 
@@ -250,12 +249,11 @@ parse ()
 
   while (MATCH (TOK_AMP) || MATCH (TOK_SEMI))
     {
-      ast_node *sep_node =
-	empty_node (MATCH (TOK_AMP) ? AST_AMP : AST_SEMI);
+      ast_node *sep_node = empty_node (MATCH (TOK_AMP) ? AST_AMP : AST_SEMI);
       add_child (program_node, sep_node);
       current_token = next_token ();
 
-      if (!MATCH (TOK_AMP) && !MATCH(TOK_SEMI) && !MATCH (TOK_EOF))
+      if (!MATCH (TOK_AMP) && !MATCH (TOK_SEMI) && !MATCH (TOK_EOF))
 	{
 	  and_or_node = parse_and_or ();
 	  add_child (program_node, and_or_node);
@@ -277,15 +275,19 @@ parse ()
 }
 
 bool
-check_ast_error(ast_node *ast) {
-    if (ast->type == AST_ERROR) {
-        fprintf(stdout, "%s\n", ast->string);
-        return true;
-    } else {
-        bool found = false;
-        for (int i = 0; i < ast->len; ++i)
-            found = found || check_ast_error(ast->children[i]);
-        return found;
+check_ast_error (ast_node *ast)
+{
+  if (ast->type == AST_ERROR)
+    {
+      fprintf (stdout, "%s\n", ast->string);
+      return true;
+    }
+  else
+    {
+      bool found = false;
+      for (int i = 0; i < ast->len; ++i)
+	found = found || check_ast_error (ast->children[i]);
+      return found;
     }
 }
 

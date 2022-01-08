@@ -60,7 +60,8 @@ token_type_to_string (token_type type)
 void
 print_token (token tok)
 {
-  printf ("token: { type: %s, content: %.*s }\n", token_names[tok.type], tok.length, tok.start);
+  printf ("token: { type: %s, content: %.*s }\n", token_names[tok.type],
+	  tok.length, tok.start);
 }
 
 void
@@ -86,7 +87,7 @@ print_ast (ast_node *node, int indent_level)
 {
   for (int i = 0; i < indent_level; i++)
     putchar ('\t');
-  
+
   printf ("%s, %d children, content: ", ast_names[node->type], node->len);
   if (node->string != NULL)
     printf ("%s", node->string);
@@ -94,7 +95,7 @@ print_ast (ast_node *node, int indent_level)
     printf ("%d", node->number);
 
   puts ("");
-  
+
   if (node->len > 0)
     {
       for (int i = 0; i < node->len; i++)

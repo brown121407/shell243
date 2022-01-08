@@ -100,7 +100,8 @@ word (quote_type qtype)
   while (!is_at_end ())
     {
       if (qtype == Q_NONE
-	  && (c == '|' || c == '&' || c == '<' || c == '>' || c == ';' || isspace (c)))
+	  && (c == '|' || c == '&' || c == '<' || c == '>' || c == ';'
+	      || isspace (c)))
 	break;
 
       if (c == '\\' && qtype == Q_NONE)

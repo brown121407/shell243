@@ -27,25 +27,28 @@
 #include "eval.h"
 
 int
-main (int argc, char *argv[])
+main ()
 {
-    eval_init ();
+  eval_init ();
   while (true)
     {
       char *line = readline ("$ ");
-      if (!line) break;
+      if (!line)
+	break;
       if (*line)
 	{
 	  add_history (line);
 	  init_lexer (line);
 	  ast_node *ast = parse ();
-      // print_ast (ast, 0);
-      if (!check_ast_error(ast))
-        eval (ast);
+#ifdef DEBUG
+	  print_ast (ast, 0);
+#endif
+	  if (!check_ast_error (ast))
+	    eval (ast);
 	  ast_free (ast);
-  }
-  else
-    check_bg_processes ();
+	}
+      else
+	check_bg_processes ();
 
       free (line);
     }
