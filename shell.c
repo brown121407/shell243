@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <signal.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -29,6 +30,8 @@
 int
 main ()
 {
+  signal (SIGINT, SIG_IGN);
+
   eval_init ();
   while (true)
     {

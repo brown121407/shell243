@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <pwd.h>
+#include <signal.h>
 
 #include "eval.h"
 #include "debug.h"
@@ -112,6 +113,8 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
     }
   else if (pid == 0)
     {
+      signal (SIGINT, SIG_DFL);
+
       if (in_fd != STDIN_FILENO)
 	{
 	  dup2 (in_fd, STDIN_FILENO);
