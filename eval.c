@@ -309,7 +309,10 @@ eval_program (const ast_node *ast)
 		return errno;
 	      }
 	    else if (pid == 0)
-	      exit (eval (ast->children[i]));
+	      {
+		free_jobs ();
+		exit (eval (ast->children[i]));
+	      }
 	    else
 	      {
 		job_add (pid);

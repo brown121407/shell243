@@ -83,5 +83,6 @@ free_jobs ()
       j = aux;
     }
 
+  last_jid = 0;
   jobs = NULL;
 }
