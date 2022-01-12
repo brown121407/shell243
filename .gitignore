@@ -80,3 +80,5 @@ fabric.properties
 
 *~
 *.o
+.ccls-cache/
+shell243

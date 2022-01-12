@@ -18,6 +18,8 @@
    along with shell243.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -31,79 +33,132 @@
 #include <signal.h>
 
 #include "eval.h"
+#include "job.h"
 #include "debug.h"
 
-pid_t *bg_pids;
-int bg_pids_len, bg_pids_crnt;
-
-void
-eval_init ()
-{
-  bg_pids_len = 2;
-  bg_pids = malloc (bg_pids_len * sizeof (pid_t));
-}
-
 static int
-eval_command (int in_fd, int out_fd, ast_node *cmd)
+eval_builtin_cd (const ast_node *cmd)
 {
-  if (strcmp (cmd->children[0]->string, "cd") == 0)
+  if (cmd->len > 2)
     {
-      if (cmd->len > 2)
+      errno = EINVAL;
+      perror ("cd");
+      return -1;
+    }
+  else if (cmd->len == 1)
+    {
+      struct passwd *pw = getpwuid (getuid ());
+      const char *homedir = pw->pw_dir;
+      if (chdir (homedir) != 0)
 	{
-	  errno = EINVAL;
 	  perror ("cd");
 	  return -1;
 	}
-      else if (cmd->len == 1)
-	{
-	  struct passwd *pw = getpwuid (getuid ());
-	  const char *homedir = pw->pw_dir;
-	  if (chdir (homedir) != 0)
-	    {
-	      perror ("cd");
-	      return -1;
-	    }
-	}
-      else
-	{
-	  if (chdir (cmd->children[1]->string) != 0)
-	    {
-	      perror ("cd");
-	      return -1;
-	    }
-	}
-
-      return 0;
     }
-  else if (strcmp (cmd->children[0]->string, "exit") == 0)
+  else
     {
-      if (cmd->len == 1)
-	exit (EXIT_SUCCESS);
-
-      if (cmd->len == 2)
+      if (chdir (cmd->children[1]->string) != 0)
 	{
-	  errno = 0;
-
-	  char *endptr;
-	  long exit_code = strtol (cmd->children[1]->string, &endptr, 10);
-
-	  if (errno)
-	    {
-	      perror ("exit");
-	      return -1;
-	    }
-
-	  if (endptr != cmd->children[1]->string)
-	    {
-	      exit (exit_code);
-	    }
+	  perror ("cd");
+	  return -1;
 	}
+    }
 
+  return 0;
+}
+
+static int
+eval_builtin_jobs (const ast_node *cmd)
+{
+  if (cmd->len > 1)
+    {
       errno = EINVAL;
-      perror ("exit");
+      perror ("jobs");
       return -1;
     }
 
+  job *j = jobs, *prev = NULL;
+  while (j)
+    {
+      int wstatus;
+      pid_t w = waitpid (j->pid, &wstatus, WNOHANG | WUNTRACED | WCONTINUED);
+
+      if (w == -1)
+	{
+	  perror ("jobs: waitpid");
+	  return -1;
+	}
+      printf ("[%d]+ ", j->jid);
+      if (w == 0)
+	printf ("Running\n");
+      else
+	{
+	  if (WIFEXITED (wstatus))
+	    {
+	      puts ("Done");
+	      job_remove (&j, &prev);
+	    }
+	  else if (WIFSIGNALED (wstatus))
+	    printf ("Killed by signal %d\n", WTERMSIG (wstatus));
+	  else if (WIFSTOPPED (wstatus))
+	    printf ("Stopped by signal %d\n", WSTOPSIG (wstatus));
+	  else if (WIFCONTINUED (wstatus))
+	    puts ("Continued");
+	}
+
+      prev = j;
+      if (j)
+	j = j->next;
+    }
+
+  return 0; 
+}
+
+static int
+eval_builtin_exit (const ast_node *cmd)
+{
+  if (cmd->len > 2)
+    {
+      errno = EINVAL;
+      perror ("jobs");
+      return -1;
+    }
+
+  if (cmd->len == 2)
+    {
+      errno = 0;
+      char *endptr;
+      long retval = strtol (cmd->children[1]->string, &endptr, 10);
+
+      if (errno != 0)
+	{
+	  perror ("exit: strtol");
+	  return errno;
+	}
+      
+      if (endptr == cmd->children[1]->string)
+	{
+	  errno = EINVAL;
+	  perror ("exit: strtol");
+	  return errno;
+	}
+
+      exit (retval);
+    }
+  else
+    exit (EXIT_SUCCESS);
+}
+
+static int
+eval_command (int in_fd, int out_fd, const ast_node *cmd)
+{
+  if (strcmp (cmd->children[0]->string, "cd") == 0)
+    return eval_builtin_cd (cmd);
+  else if (strcmp (cmd->children[0]->string, "jobs") == 0)
+    return eval_builtin_jobs (cmd);
+  else if (strcmp (cmd->children[0]->string, "exit") == 0)
+    return eval_builtin_exit (cmd);
+  
   pid_t pid = fork ();
 
   if (pid == -1)
@@ -114,7 +169,8 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
   else if (pid == 0)
     {
       signal (SIGINT, SIG_DFL);
-
+      signal (SIGTSTP, SIG_DFL);
+      
       if (in_fd != STDIN_FILENO)
 	{
 	  dup2 (in_fd, STDIN_FILENO);
@@ -136,10 +192,10 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
 
       for (; i < cmd->len; i++)
 	{
-	  ast_node *node = cmd->children[i];
-	  // TODO 0 1 2 inainte
-	  ast_node *operator = node->children[0];
-	  ast_node *file = node->children[1];
+	  const ast_node *node = cmd->children[i];
+	  // TODO Redirects with specific fds (1> 2> etc.)
+	  const ast_node *operator = node->children[0];
+	  const ast_node *file = node->children[1];
 	  if (operator->type == AST_REDIR_OP)
 	    {
 	      if (strcmp (operator->string, ">") == 0)
@@ -180,7 +236,7 @@ eval_command (int in_fd, int out_fd, ast_node *cmd)
 }
 
 static int
-eval_pipe_seq (ast_node *ast)
+eval_pipe_seq (const ast_node *ast)
 {
   pid_t *pids = (pid_t *) malloc (ast->len * sizeof (pid_t));
   int in = STDIN_FILENO, fildes[2];
@@ -211,11 +267,11 @@ eval_pipe_seq (ast_node *ast)
 
   free (pids);
 
-  return wstatus;
+  return WEXITSTATUS (wstatus);
 }
 
 static int
-eval_and_or (ast_node *ast)
+eval_and_or (const ast_node *ast)
 {
   int result;
   if (ast->type == AST_AND)
@@ -234,8 +290,10 @@ eval_and_or (ast_node *ast)
 }
 
 int
-eval_program (ast_node *ast)
+eval_program (const ast_node *ast)
 {
+  int retval = EXIT_SUCCESS;
+
   for (int i = 0; i < ast->len; i++)
     if (ast->children[i]->type != AST_SEMI
 	&& ast->children[i]->type != AST_AMP)
@@ -243,21 +301,10 @@ eval_program (ast_node *ast)
 	if (ast->len > i + 1 && ast->children[i + 1]->type == AST_AMP)
 	  {
 	    pid_t pid;
-	    bg_pids_crnt++;
-	    if (bg_pids_crnt >= bg_pids_len)
-	      {
-		bg_pids_len *= 2;
-		pid_t *new_pids = malloc (bg_pids_len * sizeof (pid_t));
-		for (int j = 0; j < bg_pids_crnt; j++)
-		  new_pids[j] = bg_pids[j];
-		free (bg_pids);
-		bg_pids = new_pids;
-	      }
 
 	    pid = fork ();
 	    if (pid == -1)
 	      {
-		bg_pids_crnt--;
 		perror ("shell");
 		return errno;
 	      }
@@ -265,20 +312,22 @@ eval_program (ast_node *ast)
 	      exit (eval (ast->children[i]));
 	    else
 	      {
-		printf ("[%d] %d\n", bg_pids_crnt, pid);
-		bg_pids[bg_pids_crnt] = pid;
+		job_add (pid);
+		printf ("[%d] %d\n", last_jid, pid);
+		retval = EXIT_SUCCESS;
 	      }
 	  }
 	else // foreground process
-	  eval (ast->children[i]);
-
-	check_bg_processes ();
+	  retval = eval (ast->children[i]);
       }
-  return 0;
+
+  check_bg_processes ();
+
+  return retval;
 }
 
 int
-eval (ast_node *ast)
+eval (const ast_node *ast)
 {
   switch (ast->type)
     {
@@ -299,19 +348,26 @@ eval (ast_node *ast)
 void
 check_bg_processes ()
 {
-  for (int j = 1; j <= bg_pids_crnt; j++)
+  job *j = jobs, *prev = NULL;
+  while (j)
     {
-      int status;
-      if (bg_pids[j] != -1)
-	{
-	  waitpid (bg_pids[j], &status, WNOHANG);
-	  if (WIFEXITED (status))
-	    {
-	      printf ("[%d]+ Done\n", j);
-	      bg_pids[j] = -1;
-	    }
-	}
-    }
+      int wstatus = 0;
+      pid_t pid = waitpid (j->pid, &wstatus, WNOHANG);
 
-  for (; bg_pids_crnt >= 1 && bg_pids[bg_pids_crnt] == -1; bg_pids_crnt--) {}
+      if (pid == -1)
+	{
+	  printf ("fucked up with pid: %d, job %d\n", j->pid, j->jid);
+	  perror ("check_bg_processes: waitpid");
+	  return;
+	}
+
+      if (pid)
+	{
+	  printf ("[%d]+ Done\n", j->jid);
+	  job_remove (&j, &prev);
+	}
+      prev = j;
+      if (j)
+	j = j->next;
+    }
 }

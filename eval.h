@@ -25,10 +25,7 @@
 #include "parser.h"
 
 int
-eval (ast_node *ast);
-
-void
-eval_init ();
+eval (const ast_node *ast);
 
 void
 check_bg_processes ();

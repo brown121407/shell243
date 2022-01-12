@@ -20,7 +20,7 @@ AND  = "&&" ;
 PIPE = "|" ;
 OR   = "||" ;
 SEMI = ";" ;
-IONUM = ? digit ?, { ? digit ? }
+IONUM = ? digit ?, { ? digit ? } ;
 
 program = and or, { separator, and or } ;
 

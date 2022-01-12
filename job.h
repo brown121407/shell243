@@ -1,6 +1,4 @@
 /* Copyright (C) 2021 by Alexandru-Sergiu Marton
-   Copyright (C) 2021 by Daria Mihaela Broscoțeanu
-   Copyright (C) 2021 by Andreea Diana Gherghescu
 
    This file is part of shell243.
    
@@ -18,43 +16,28 @@
    along with shell243.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <signal.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#ifndef SH243_JOB_H
+#define SH243_JOB_H
 
-#include "parser.h"
-#include "eval.h"
-#include "debug.h"
+#include <sys/types.h>
 
-int
-main ()
+typedef struct job
 {
-  signal (SIGINT, SIG_IGN);
+  pid_t pid;
+  int jid;
+  struct job *next;
+} job;
 
-  while (true)
-    {
-      char *line = readline ("$ ");
-      if (!line)
-	break;
-      if (*line)
-	{
-	  add_history (line);
-	  init_lexer (line);
-	  ast_node *ast = parse ();
-#ifdef DEBUG
-	  print_ast (ast, 0);
+extern int last_jid;
+extern job *jobs;
+
+void
+job_add (pid_t pid);
+
+void
+job_remove (job **j, job **prev);
+
+void
+free_jobs ();
+
 #endif
-	  if (!check_ast_error (ast))
-	    eval (ast);
-	  ast_free (ast);
-	}
-      else
-	check_bg_processes ();
-
-      free (line);
-    }
-  return 0;
-}
